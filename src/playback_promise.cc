@@ -65,6 +65,8 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
   hangover = napi_call_threadsafe_function(tsFn, frame, napi_tsfn_nonblocking);
   if (hangover != napi_ok) {
     printf("DEBUG: Failed to call NAPI threadsafe function on scheduled frame completion.");
+    // If the call failed, we must delete the frame since playedFrame() won't be called
+    delete frame;
   }
 
   status = napi_release_threadsafe_function(tsFn, napi_tsfn_release);
@@ -73,7 +75,6 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
     return E_FAIL;
   }
 
-  // delete frame;
   return S_OK;
 }
 
@@ -130,6 +131,7 @@ void playbackExecute(napi_env env, void* data) {
 
   if (c->enableKeying) {
     if (deckLink->QueryInterface(IID_IDeckLinkKeyer, (void **)&deckLinkKeyer) != S_OK) {
+      deckLinkOutput->Release();
       deckLink->Release();
       c->status = MACADAM_NO_OUTPUT;
       c->errorMsg = "Unable to retrieve the requested keyer. Is keying supported?";
@@ -148,6 +150,10 @@ void playbackExecute(napi_env env, void* data) {
     c->requestedPixelFormat, bmdVideoOutputFlagDefault,
     &supported, &c->selectedDisplayMode);
   if (hresult != S_OK) {
+    deckLinkOutput->Release();
+    if (c->enableKeying && deckLinkKeyer != nullptr) {
+      deckLinkKeyer->Release();
+    }
     c->status = MACADAM_CALL_FAILURE;
     c->errorMsg = "Unable to determine if video mode is supported by output device.";
     return;
@@ -156,10 +162,24 @@ void playbackExecute(napi_env env, void* data) {
     case bmdDisplayModeSupported:
       break;
     case bmdDisplayModeSupportedWithConversion:
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
       c->status = MACADAM_NO_CONVERESION; // TODO consider adding conversion support
       c->errorMsg = "Display mode is supported via conversion and not by macadam.";
       return;
     default:
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
       c->status = MACADAM_MODE_NOT_SUPPORTED;
       c->errorMsg = "Requested display mode is not supported.";
       return;
@@ -183,18 +203,46 @@ void playbackExecute(napi_env env, void* data) {
   hresult = deckLinkOutput->EnableVideoOutput(c->requestedDisplayMode, outputFlags);
   switch (hresult) {
     case E_INVALIDARG: // Should have been picked up by DoesSupportVideoMode
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
       c->status = MACADAM_INVALID_ARGS;
       c->errorMsg = "Invalid arguments used to enable video output.";
       return;
     case E_ACCESSDENIED:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
       c->status = MACADAM_ACCESS_DENIED;
       c->errorMsg = "Unable to access the hardware or input stream is currently active.";
       return;
     case E_OUTOFMEMORY:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
       c->status = MACADAM_OUT_OF_MEMORY;
       c->errorMsg = "Unable to create an output video frame - out of memory.";
       return;
     case E_FAIL:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      if (c->enableKeying && deckLinkKeyer != nullptr) {
+        deckLinkKeyer->Release();
+      }
       c->status = MACADAM_CALL_FAILURE;
       c->errorMsg = "Failed to enable video input.";
       return;
@@ -207,18 +255,46 @@ void playbackExecute(napi_env env, void* data) {
       c->requestedSampleType, c->channels, bmdAudioOutputStreamTimestamped);
     switch (hresult)  {
       case E_INVALIDARG:
+        if (c->selectedDisplayMode != nullptr) {
+          c->selectedDisplayMode->Release();
+        }
+        deckLinkOutput->Release();
+        if (c->enableKeying && deckLinkKeyer != nullptr) {
+          deckLinkKeyer->Release();
+        }
         c->status = MACADAM_INVALID_ARGS;
         c->errorMsg = "Invalid arguments used to enable audio output. BMD supports 48kHz, 16- or 32-bit integer only.";
         return;
       case E_FAIL:
+        if (c->selectedDisplayMode != nullptr) {
+          c->selectedDisplayMode->Release();
+        }
+        deckLinkOutput->Release();
+        if (c->enableKeying && deckLinkKeyer != nullptr) {
+          deckLinkKeyer->Release();
+        }
         c->status = MACADAM_CALL_FAILURE;
         c->errorMsg = "Failed to enable audio input.";
         return;
       case E_ACCESSDENIED:
+        if (c->selectedDisplayMode != nullptr) {
+          c->selectedDisplayMode->Release();
+        }
+        deckLinkOutput->Release();
+        if (c->enableKeying && deckLinkKeyer != nullptr) {
+          deckLinkKeyer->Release();
+        }
         c->status = MACADAM_ACCESS_DENIED;
         c->errorMsg = "Unable to access the hardware or audio output is not enabled.";
         return;
       case E_OUTOFMEMORY:
+        if (c->selectedDisplayMode != nullptr) {
+          c->selectedDisplayMode->Release();
+        }
+        deckLinkOutput->Release();
+        if (c->enableKeying && deckLinkKeyer != nullptr) {
+          deckLinkKeyer->Release();
+        }
         c->status = MACADAM_OUT_OF_MEMORY;
         c->errorMsg = "Unable to create a new internal audio frame - out of memory.";
         return;
@@ -231,6 +307,11 @@ void playbackExecute(napi_env env, void* data) {
   if (c->enableKeying) {
     hresult = deckLinkKeyer->Enable(c->isExternal);
     if (hresult != S_OK) {
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      deckLinkKeyer->Release();
       c->status = MACADAM_CALL_FAILURE;
       c->errorMsg = "Failed to enable keying.";
       return;
@@ -238,6 +319,11 @@ void playbackExecute(napi_env env, void* data) {
 
     hresult = deckLinkKeyer->SetLevel(c->keyLevel);
     if (hresult != S_OK) {
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkOutput->Release();
+      deckLinkKeyer->Release();
       c->status = MACADAM_CALL_FAILURE;
       c->errorMsg = "Failed to set key level.";
       return;
@@ -495,6 +581,7 @@ void playbackComplete(napi_env env, napi_status asyncStatus, void* data) {
 
   hresult = pbts->deckLinkOutput->SetScheduledFrameCompletionCallback(pbts);
   if (hresult != S_OK) {
+    delete pbts;
     c->status = MACADAM_CALL_FAILURE;
     c->errorMsg = "Unable to set callback for deck link output.";
     REJECT_STATUS;
@@ -612,7 +699,10 @@ void playbackComplete(napi_env env, napi_status asyncStatus, void* data) {
   REJECT_STATUS;
   c->status = napi_create_threadsafe_function(env, param, nullptr, asyncName,
     20, 1, nullptr, playbackTsFnFinalize, pbts, playedFrame, &pbts->tsFn);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    delete pbts;
+    REJECT_STATUS;
+  }
 
   c->status = napi_create_external(env, pbts, finalizePlaybackCarrier, nullptr, &param);
   REJECT_STATUS;
@@ -972,10 +1062,12 @@ void playedFrame(napi_env env, napi_value jsCb, void* context, void* data) {
   }
 
 bail:
-  status = napi_delete_reference(env, frame->sourceBufferRef);
-  if (status != napi_ok) {
-    printf("DEBUG: Failed to delete video buffer reference for scheduled frame %lld.\n",
-      (long long) frame->scheduledTime);
+  if (frame->sourceBufferRef != nullptr) {
+    status = napi_delete_reference(env, frame->sourceBufferRef);
+    if (status != napi_ok) {
+      printf("DEBUG: Failed to delete video buffer reference for scheduled frame %lld.\n",
+        (long long) frame->scheduledTime);
+    }
   }
   delete frame;
   return;
@@ -1171,7 +1263,10 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   status = napi_is_buffer(env, videoBuffer, &isBuffer);
   CHECK_STATUS;
 
-  if (!isBuffer) NAPI_THROW_ERROR("Video data must be provided as a node buffer.");
+  if (!isBuffer) {
+    delete frame;
+    NAPI_THROW_ERROR("Video data must be provided as a node buffer.");
+  }
 
   status = napi_get_buffer_info(env, videoBuffer, &frame->data, &frame->dataSize);
   CHECK_STATUS;
@@ -1180,7 +1275,10 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
   status = napi_typeof(env, param, &type);
   CHECK_STATUS;
-  if (type != napi_number) NAPI_THROW_ERROR("Scheduled time must be a number.");
+  if (type != napi_number) {
+    delete frame;
+    NAPI_THROW_ERROR("Scheduled time must be a number.");
+  }
   status = napi_get_value_int64(env, param, &frame->scheduledTime);
   CHECK_STATUS;
 
@@ -1194,7 +1292,10 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   if (pbts->channels > 0) {
     status = napi_has_named_property(env, argv[0], "audio", &hasProp);
     CHECK_STATUS;
-    if (!hasProp) NAPI_THROW_ERROR("To schedule a frame, an audio buffer must be provided.");
+    if (!hasProp) {
+      delete frame;
+      NAPI_THROW_ERROR("To schedule a frame, an audio buffer must be provided.");
+    }
 
     status = napi_get_named_property(env, argv[0], "audio", &audioBuffer);
     CHECK_STATUS;
@@ -1202,7 +1303,10 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     status = napi_is_buffer(env, videoBuffer, &isBuffer);
     CHECK_STATUS;
 
-    if (!isBuffer) NAPI_THROW_ERROR("Audio data must be provided as a node buffer.");
+    if (!isBuffer) {
+      delete frame;
+      NAPI_THROW_ERROR("Audio data must be provided as a node buffer.");
+    }
 
     status = napi_get_named_property(env, argv[0], "sampleFrameCount", &param);
     CHECK_STATUS;
@@ -1217,8 +1321,10 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     }
   }
 
-  if (((int32_t) frame->dataSize) < (pbts->rowBytes * pbts->height))
+  if (((int32_t) frame->dataSize) < (pbts->rowBytes * pbts->height)) {
+    delete frame;
     NAPI_THROW_ERROR("Insufficient bytes provided to schedule video frame.");
+  }
 
   frame->width = pbts->width;
   frame->height = pbts->height;
@@ -1238,13 +1344,17 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     case S_OK:
       break;
     case E_ACCESSDENIED:
+      delete frame;
       NAPI_THROW_ERROR("Failed to schedule frame as the video output is not enabled.");
     case E_INVALIDARG:
+      delete frame;
       NAPI_THROW_ERROR("Failed to schedule frame as the attributes are invalid.");
     case E_OUTOFMEMORY:
+      delete frame;
       NAPI_THROW_ERROR("Fauled to schedule frame as too many frames are already scheduled.");
     case E_FAIL:
     default:
+      delete frame;
       NAPI_THROW_ERROR("Failed to schedule frame - general failure.");
   }
 
@@ -1261,6 +1371,8 @@ napi_value schedule(napi_env env, napi_callback_info info) {
       case S_OK:
         break;
       case E_ACCESSDENIED:
+        // Frame is already scheduled for video, so we can't delete it
+        // It will be cleaned up when ScheduledFrameCompleted fires
         NAPI_THROW_ERROR("Audio output has not been enabled or audio sample write in progress.");
       case E_INVALIDARG:
         NAPI_THROW_ERROR("No timescale was provided when scheduling audio samples.");

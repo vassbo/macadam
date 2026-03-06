@@ -202,6 +202,7 @@ HRESULT macadamTimecode::GetString (/* out */ BSTR *timecode) {
   hresult = formatTimecodeString(&tcstr);
   _bstr_t btcstr(tcstr);
   *timecode = btcstr;
+  free((void*) tcstr);
   return hresult;
 }
 #elif __APPLE__
@@ -212,6 +213,7 @@ HRESULT macadamTimecode::GetString (/* out */ CFStringRef *timecode) {
   /* hresult = */ formatTimecodeString(&tcstr);
   CFStringRef cftcstr = CFStringCreateWithCString(nullptr, tcstr, kCFStringEncodingMacRoman);
   *timecode = cftcstr;
+  free((void*) tcstr);
   return E_NOTIMPL;
 }
 #else

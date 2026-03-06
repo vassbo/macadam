@@ -63,6 +63,11 @@ HRESULT captureThreadsafe::VideoInputFrameArrived(
   hangover = napi_call_threadsafe_function(tsFn, data, napi_tsfn_nonblocking);
   if (hangover != napi_ok) {
     printf("DEBUG: Failed to call NAPI threadsafe function on capture.");
+    videoFrame->Release();
+    if (audioPacket != nullptr) {
+      audioPacket->Release();
+    }
+    free(data);
   }
 
   status = napi_release_threadsafe_function(tsFn, napi_tsfn_release);
@@ -219,6 +224,7 @@ void captureExecute(napi_env env, void* data) {
     c->requestedPixelFormat, bmdVideoInputFlagDefault,
     &supported, &c->selectedDisplayMode);
   if (hresult != S_OK) {
+    deckLinkInput->Release();
     c->status = MACADAM_CALL_FAILURE;
     c->errorMsg = "Unable to determine if video mode is supported by input device.";
     return;
@@ -227,10 +233,18 @@ void captureExecute(napi_env env, void* data) {
     case bmdDisplayModeSupported:
       break;
     case bmdDisplayModeSupportedWithConversion:
+      deckLinkInput->Release();
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
       c->status = MACADAM_NO_CONVERESION;
       c->errorMsg = "Display mode is supported via conversion and not by macadam.";
       return;
     default:
+      deckLinkInput->Release();
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
       c->status = MACADAM_MODE_NOT_SUPPORTED;
       c->errorMsg = "Requested display mode is not supported.";
       return;
@@ -240,18 +254,34 @@ void captureExecute(napi_env env, void* data) {
     c->requestedPixelFormat, bmdVideoInputFlagDefault);
   switch (hresult) {
     case E_INVALIDARG: // Should have been picked up by DoesSupportVideoMode
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkInput->Release();
       c->status = MACADAM_INVALID_ARGS;
       c->errorMsg = "Invalid arguments used to enable video input.";
       return;
     case E_ACCESSDENIED:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkInput->Release();
       c->status = MACADAM_ACCESS_DENIED;
       c->errorMsg = "Unable to access the hardware or input stream is currently active.";
       return;
     case E_OUTOFMEMORY:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkInput->Release();
       c->status = MACADAM_OUT_OF_MEMORY;
       c->errorMsg = "Unable to create a new video frame - out of memory.";
       return;
     case E_FAIL:
+      if (c->selectedDisplayMode != nullptr) {
+        c->selectedDisplayMode->Release();
+      }
+      deckLinkInput->Release();
       c->status = MACADAM_CALL_FAILURE;
       c->errorMsg = "Failed to enable video input.";
       return;
@@ -264,10 +294,12 @@ void captureExecute(napi_env env, void* data) {
       c->requestedSampleType, c->channels);
     switch (hresult)  {
       case E_INVALIDARG:
+        deckLinkInput->Release();
         c->status = MACADAM_INVALID_ARGS;
         c->errorMsg = "Invalid arguments used to enable audio input. BMD supports 48kHz, 16- or 32-bit integer only.";
         return;
       case E_FAIL:
+        deckLinkInput->Release();
         c->status = MACADAM_CALL_FAILURE;
         c->errorMsg = "Failed to enable audio input.";
         return;
@@ -444,6 +476,7 @@ void captureComplete(napi_env env, napi_status asyncStatus, void* data) {
 
   hresult = crts->deckLinkInput->SetCallback(crts);
   if (hresult != S_OK) {
+    delete crts;
     c->status = MACADAM_CALL_FAILURE;
     c->errorMsg = "Unable to set callback for deck link input.";
     REJECT_STATUS;
@@ -455,7 +488,10 @@ void captureComplete(napi_env env, napi_status asyncStatus, void* data) {
   REJECT_STATUS;
   c->status = napi_create_threadsafe_function(env, param, nullptr, asyncName,
     20, 1, nullptr, captureTsFnFinalize, crts, frameResolver, &crts->tsFn);
-  REJECT_STATUS;
+  if (c->status != napi_ok) {
+    delete crts;
+    REJECT_STATUS;
+  }
 
   c->status = napi_create_external(env, crts, finalizeCaptureCarrier, nullptr, &param);
   REJECT_STATUS;
@@ -852,11 +888,19 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
         REJECT_BAIL;
       }
       audioFinalizeData = (audioData*) malloc(sizeof(audioData));
+      if (audioFinalizeData == nullptr) {
+        c->errorMsg = "Failed to allocate memory for audio data structure.";
+        c->status = MACADAM_OUT_OF_MEMORY;
+        REJECT_BAIL;
+      }
       audioFinalizeData->audioPacket = frame->audioPacket;
       audioFinalizeData->dataSize = sampleFrameCount * crts->sampleByteFactor;
       c->status = napi_create_external_buffer(env,
         audioFinalizeData->dataSize, bytes, finalizeAudioPacket, audioFinalizeData, &param);
-      REJECT_BAIL;
+      if (c->status != napi_ok) {
+        free(audioFinalizeData);
+        REJECT_BAIL;
+      }
       c->status = napi_set_named_property(env, obj, "data", param);
       REJECT_BAIL;
       c->status = napi_adjust_external_memory(env,
