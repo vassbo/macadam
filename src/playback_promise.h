@@ -183,7 +183,7 @@ struct playbackThreadsafe : IDeckLinkVideoOutputCallback {
     if (deckLinkOutput != nullptr) { deckLinkOutput->Release(); }
     if (deckLinkKeyer != nullptr) { deckLinkKeyer->Release(); }
     if (displayMode != nullptr) { displayMode->Release(); }
-    if (timecode == nullptr) { delete timecode; }
+    if (timecode != nullptr) { delete timecode; }
   }
 };
 

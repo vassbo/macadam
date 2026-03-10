@@ -65,7 +65,6 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
   hangover = napi_call_threadsafe_function(tsFn, frame, napi_tsfn_nonblocking);
   if (hangover != napi_ok) {
     printf("DEBUG: Failed to call NAPI threadsafe function on scheduled frame completion.");
-    // If the call failed, we must delete the frame since playedFrame() won't be called
     delete frame;
   }
 
@@ -973,8 +972,7 @@ void playedFrame(napi_env env, napi_value jsCb, void* context, void* data) {
   //printf("Scheduled frame %lld playback completed with timestamp %lld and result %i.\n",
   //  frame->scheduledTime, frame->completionTimestamp, frame->result);
 
-  for (std::map<BMDTimeValue, scheduleCarrier*>::iterator it = pbts->pendingPlays.begin() ;
-    it != pbts->pendingPlays.end() ; ++it) {
+  for (auto it = pbts->pendingPlays.begin(); it != pbts->pendingPlays.end(); ) {
 
     if (it->first > frame->scheduledTime - pbts->pendingTimeoutTicks) break;
     char* extMsg = (char *) malloc(sizeof(char) * 200);
@@ -987,14 +985,14 @@ void playedFrame(napi_env env, napi_value jsCb, void* context, void* data) {
     FLOATING_STATUS;
     status = napi_create_string_utf8(env, extMsg, NAPI_AUTO_LENGTH, &errorMsg);
     FLOATING_STATUS;
+    free(extMsg);
     status = napi_create_error(env, errorCode, errorMsg, &errorValue);
     FLOATING_STATUS;
     status = napi_reject_deferred(env, it->second->_deferred, errorValue);
     FLOATING_STATUS;
 
     tidyCarrier(env, it->second);
-    pbts->pendingPlays.erase(it->first);
-    if (pbts->pendingPlays.empty()) break;
+    it = pbts->pendingPlays.erase(it);  // erase returns the next valid iterator
   }
 
   // See if any pending play promises exist in map and fulfil
@@ -1371,8 +1369,6 @@ napi_value schedule(napi_env env, napi_callback_info info) {
       case S_OK:
         break;
       case E_ACCESSDENIED:
-        // Frame is already scheduled for video, so we can't delete it
-        // It will be cleaned up when ScheduledFrameCompleted fires
         NAPI_THROW_ERROR("Audio output has not been enabled or audio sample write in progress.");
       case E_INVALIDARG:
         NAPI_THROW_ERROR("No timescale was provided when scheduling audio samples.");
@@ -1706,6 +1702,11 @@ napi_value stopPlayback(napi_env env, napi_callback_info info) {
     if (hresult != S_OK) NAPI_THROW_ERROR("Failed to stop scheduled playback.");
   }
 
+  // Clear the callback immediately after stopping so no further ScheduledFrameCompleted
+  // calls can be posted to the threadsafe function queue during the remaining teardown.
+  hresult = pbts->deckLinkOutput->SetScheduledFrameCompletionCallback(nullptr);
+  if (hresult != S_OK) NAPI_THROW_ERROR("Failed to clear the frame completion callback.");
+
   if (pbts->enableKeying) {
     hresult = pbts->deckLinkKeyer->Disable();
     if (hresult != S_OK) NAPI_THROW_ERROR("Failed to disable keyer.");
@@ -1716,15 +1717,32 @@ napi_value stopPlayback(napi_env env, napi_callback_info info) {
   hresult = pbts->deckLinkOutput->DisableVideoOutput();
   if (hresult != S_OK) NAPI_THROW_ERROR("Failed to disable video output.");
 
-  hresult = pbts->deckLinkOutput->SetScheduledFrameCompletionCallback(nullptr);
-  if (hresult != S_OK) NAPI_THROW_ERROR("Failed to clear the frame completion callback.");
-
   if (pbts->channels > 0) {
     hresult = pbts->deckLinkOutput->DisableAudioOutput();
     if (hresult != S_OK) NAPI_THROW_ERROR("Failed to disable audio output.");
   }
 
-  // TODO consider clearing audio callback as a matter of course
+  // Reject any pending played() promises whose frames will never complete now that
+  // playback has stopped. This prevents scheduleCarrier objects and JS deferred
+  // handles from leaking when the caller does not await all frames before stopping.
+  if (!pbts->pendingPlays.empty()) {
+    napi_value rejectErrorValue, rejectErrorCode, rejectErrorMsg;
+    char errorCodeChars[20];
+    snprintf(errorCodeChars, 20, "%d", MACADAM_ALREADY_STOPPED);
+    status = napi_create_string_utf8(env, errorCodeChars, NAPI_AUTO_LENGTH, &rejectErrorCode);
+    FLOATING_STATUS;
+    status = napi_create_string_utf8(env, "Playback stopped before frame was played.",
+      NAPI_AUTO_LENGTH, &rejectErrorMsg);
+    FLOATING_STATUS;
+    status = napi_create_error(env, rejectErrorCode, rejectErrorMsg, &rejectErrorValue);
+    FLOATING_STATUS;
+    for (auto& pair : pbts->pendingPlays) {
+      status = napi_reject_deferred(env, pair.second->_deferred, rejectErrorValue);
+      FLOATING_STATUS;
+      tidyCarrier(env, pair.second);
+    }
+    pbts->pendingPlays.clear();
+  }
 
   status = napi_release_threadsafe_function(pbts->tsFn, napi_tsfn_release);
   CHECK_STATUS;
