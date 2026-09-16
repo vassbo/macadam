@@ -152,7 +152,15 @@ struct displayFrameCarrier : carrier, macadamFrame {
   size_t audioDataSize;
   uint32_t sampleFrameCount;
   napi_ref audioRef = nullptr;
-  ~displayFrameCarrier() {}
+  ~displayFrameCarrier() override {}
+
+  // Override AddRef/Release so DeckLink driver's internal calls do not delete this carrier subobject.
+  // The carrier's lifetime is owned and managed by tidyCarrier().
+  ULONG AddRef() override { return ++refCount; }
+  ULONG Release() override {
+    ULONG count = --refCount;
+    return count;
+  }
 };
 
 struct scheduleCarrier : carrier {

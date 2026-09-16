@@ -100,6 +100,10 @@ void playbackExecute(napi_env env, void* data) {
   }
 
   for ( uint32_t x = 0 ; x <= c->deviceIndex ; x++ ) {
+    if (x > 0 && deckLink != nullptr) {
+      deckLink->Release();
+      deckLink = nullptr;
+    }
     if (deckLinkIterator->Next(&deckLink) != S_OK) {
       deckLinkIterator->Release();
       c->status = MACADAM_OUT_OF_BOUNDS;
