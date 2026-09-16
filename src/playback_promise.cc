@@ -59,7 +59,7 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
   hangover = napi_call_threadsafe_function(tsFn, frame, napi_tsfn_nonblocking);
   if (hangover != napi_ok) {
     printf("DEBUG: Failed to call NAPI threadsafe function on scheduled frame completion.");
-    delete frame;
+    frame->Release();
     return E_FAIL;
   }
 
@@ -1057,7 +1057,7 @@ bail:
         (long long) frame->scheduledTime);
     }
   }
-  delete frame;
+  frame->Release();
   return;
 }
 
@@ -1252,7 +1252,7 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   CHECK_STATUS;
 
   if (!isBuffer) {
-    delete frame;
+    frame->Release();
     NAPI_THROW_ERROR("Video data must be provided as a node buffer.");
   }
 
@@ -1264,7 +1264,7 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   status = napi_typeof(env, param, &type);
   CHECK_STATUS;
   if (type != napi_number) {
-    delete frame;
+    frame->Release();
     NAPI_THROW_ERROR("Scheduled time must be a number.");
   }
   status = napi_get_value_int64(env, param, &frame->scheduledTime);
@@ -1273,15 +1273,17 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   status = napi_get_named_property(env, playback, "deckLinkOutput", &param);
   CHECK_STATUS;
   status = napi_get_value_external(env, param, (void**) &pbts);
-  if (status == napi_invalid_arg)
+  if (status == napi_invalid_arg) {
+    frame->Release();
     NAPI_THROW_ERROR("Cannot schedule frames after playout has stopped.");
+  }
   CHECK_STATUS;
 
   if (pbts->channels > 0) {
     status = napi_has_named_property(env, argv[0], "audio", &hasProp);
     CHECK_STATUS;
     if (!hasProp) {
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("To schedule a frame, an audio buffer must be provided.");
     }
 
@@ -1292,7 +1294,7 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     CHECK_STATUS;
 
     if (!isBuffer) {
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("Audio data must be provided as a node buffer.");
     }
 
@@ -1310,7 +1312,7 @@ napi_value schedule(napi_env env, napi_callback_info info) {
   }
 
   if (((int32_t) frame->dataSize) < (pbts->rowBytes * pbts->height)) {
-    delete frame;
+    frame->Release();
     NAPI_THROW_ERROR("Insufficient bytes provided to schedule video frame.");
   }
 
@@ -1332,17 +1334,17 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     case S_OK:
       break;
     case E_ACCESSDENIED:
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("Failed to schedule frame as the video output is not enabled.");
     case E_INVALIDARG:
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("Failed to schedule frame as the attributes are invalid.");
     case E_OUTOFMEMORY:
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("Fauled to schedule frame as too many frames are already scheduled.");
     case E_FAIL:
     default:
-      delete frame;
+      frame->Release();
       NAPI_THROW_ERROR("Failed to schedule frame - general failure.");
   }
 

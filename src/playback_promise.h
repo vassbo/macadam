@@ -43,6 +43,7 @@
 #ifndef PLAYBACK_PROMISE_H
 #define PLAYBACK_PROMISE_H
 
+#include <atomic>
 #include <unordered_map>
 
 #ifdef WIN32
@@ -102,6 +103,7 @@ struct playbackCarrier : carrier {
 };
 
 struct macadamFrame : IDeckLinkVideoFrame {
+  std::atomic<ULONG> refCount{1};
   int32_t width;
   int32_t height;
   int32_t rowBytes;
@@ -116,6 +118,7 @@ struct macadamFrame : IDeckLinkVideoFrame {
   napi_ref sourceBufferRef = nullptr;
   macadamTimecode* tc = nullptr;
   BMDOutputFrameCompletionResult result;
+  virtual ~macadamFrame() {}
   long GetWidth (void) { return width; };
   long GetHeight (void) { return height; };
   long GetRowBytes (void) { return rowBytes; };
@@ -134,8 +137,14 @@ struct macadamFrame : IDeckLinkVideoFrame {
   }
   HRESULT GetBytes (void **buffer) { *buffer = data; return S_OK; };
   HRESULT	QueryInterface (REFIID iid, LPVOID *ppv) { return E_NOINTERFACE; }
-  ULONG AddRef() { return 1; };
-  ULONG Release() { return 1; };
+  ULONG AddRef() { return ++refCount; };
+  ULONG Release() {
+    ULONG count = --refCount;
+    if (count == 0) {
+      delete this;
+    }
+    return count;
+  };
 };
 
 struct displayFrameCarrier : carrier, macadamFrame {
