@@ -1113,6 +1113,11 @@ void displayFrameComplete(napi_env env, napi_status asyncStatus, void* data) {
   displayFrameCarrier* c = (displayFrameCarrier*) data;
   napi_value result;
 
+  if (c->audioRef != nullptr) {
+    napi_delete_reference(env, c->audioRef);
+    c->audioRef = nullptr;
+  }
+
   if (asyncStatus != napi_ok) {
     c->status = asyncStatus;
     c->errorMsg = "Display frame failed to complete.";
@@ -1121,11 +1126,6 @@ void displayFrameComplete(napi_env env, napi_status asyncStatus, void* data) {
 
   c->status = napi_create_object(env, &result);
   REJECT_STATUS;
-
-  if (c->audioRef != nullptr) {
-    c->status = napi_delete_reference(env, c->audioRef);
-    REJECT_STATUS;
-  }
 
   if (c->tc != nullptr) {
     c->tc->Update();

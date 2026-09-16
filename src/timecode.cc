@@ -73,7 +73,7 @@ BMDTimecodeBCD macadamTimecode::GetBCD() {
   bcdtc = ((hours / 10) << 28) | ((hours % 10) << 24) |
     ((minutes / 10) << 20) | ((minutes % 10) << 16) |
     ((seconds / 10) << 12) | ((seconds % 10) << 8) |
-    ((frames / 10) << 4) | frames % 10;
+    ((frames / 10) << 4) | (frames % 10);
 
   return bcdtc;
 }
@@ -185,7 +185,7 @@ HRESULT macadamTimecode::formatTimecodeString(const char** timecode, bool fieldF
   }
   else {
     tcstr = (char *) malloc(12 * sizeof(char));
-    snprintf(tcstr, 14, "%02i:%02i:%02i%c%02i", hours, minutes, seconds,
+    snprintf(tcstr, 12, "%02i:%02i:%02i%c%02i", hours, minutes, seconds,
       ((flags & bmdTimecodeIsDropFrame) != 0) ? ';' : ':', frames);
     tcstr[11] = '\0';
   }
@@ -382,7 +382,7 @@ napi_value timecodeTest(napi_env env, napi_callback_info info) {
   pass = pass && ((tc->GetFlags() & bmdTimecodeIsDropFrame) == 0);
   delete tc;
 
-  pass = pass & (parseTimecode(60, "10:11:12;13.1", &tc) == S_OK);
+  pass = pass && (parseTimecode(60, "10:11:12;13.1", &tc) == S_OK);
   pass = pass && (tc != nullptr);
   tc->GetComponents(&hours, &minutes, &seconds, &frames);
   pass = pass && (hours == 10) && (minutes == 11) && (seconds == 12) && (frames == 13);

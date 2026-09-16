@@ -138,6 +138,26 @@ napi_value stopStreams(napi_env env, napi_callback_info info) {
 	hresult = crts->deckLinkInput->SetCallback(NULL);
   if (hresult != S_OK) NAPI_THROW_ERROR("Unable to unset callback for decklink input.");
 
+  if (!crts->framePromises.empty()) {
+    napi_value rejectErrorValue, rejectErrorCode, rejectErrorMsg;
+    char errorCodeChars[20];
+    snprintf(errorCodeChars, 20, "%d", MACADAM_ALREADY_STOPPED);
+    status = napi_create_string_utf8(env, errorCodeChars, NAPI_AUTO_LENGTH, &rejectErrorCode);
+    FLOATING_STATUS;
+    status = napi_create_string_utf8(env, "Capture stopped before frame was received.",
+      NAPI_AUTO_LENGTH, &rejectErrorMsg);
+    FLOATING_STATUS;
+    status = napi_create_error(env, rejectErrorCode, rejectErrorMsg, &rejectErrorValue);
+    FLOATING_STATUS;
+    while (!crts->framePromises.empty()) {
+      frameCarrier* pendingCarrier = crts->framePromises.front();
+      crts->framePromises.pop();
+      status = napi_reject_deferred(env, pendingCarrier->_deferred, rejectErrorValue);
+      FLOATING_STATUS;
+      tidyCarrier(env, pendingCarrier);
+    }
+  }
+
   status = napi_release_threadsafe_function(crts->tsFn, napi_tsfn_release);
   CHECK_STATUS;
 
@@ -677,8 +697,12 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
   //printf("Received an input frame %lix%li\n", frame->videoFrame->GetWidth(),
   //  frame->videoFrame->GetHeight());
 
+  bool videoWrapped = false;
+  bool audioWrapped = false;
+
   if (!crts->framePromises.empty()) {
     c = crts->framePromises.front();
+    crts->framePromises.pop();
 
     c->status = napi_create_object(env, &result);
     REJECT_BAIL;
@@ -737,6 +761,7 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
     c->status = napi_create_external_buffer(env, rowBytes*height, bytes,
       finalizeVideoBuffer, frame->videoFrame, &param);
     REJECT_BAIL;
+    videoWrapped = true;
     c->status = napi_set_named_property(env, obj, "data", param);
     REJECT_BAIL;
     c->status = napi_adjust_external_memory(env, rowBytes*height, &externalMemory);
@@ -901,6 +926,7 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
         free(audioFinalizeData);
         REJECT_BAIL;
       }
+      audioWrapped = true;
       c->status = napi_set_named_property(env, obj, "data", param);
       REJECT_BAIL;
       c->status = napi_adjust_external_memory(env,
@@ -918,7 +944,12 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
   }
 
 bail:
-  if (!crts->framePromises.empty()) crts->framePromises.pop();
+  if (!videoWrapped && frame->videoFrame != nullptr) {
+    frame->videoFrame->Release();
+  }
+  if (!audioWrapped && frame->audioPacket != nullptr) {
+    frame->audioPacket->Release();
+  }
   free(frame);
 
   return;

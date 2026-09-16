@@ -1423,7 +1423,14 @@ napi_value getDeviceInfo(napi_env env, napi_callback_info info) {
 
     status = napi_set_element(env, result, index++, item);
     CHECK_BAIL;
-  } // end while look
+
+    if (deckLinkAttributes != nullptr) {
+      deckLinkAttributes->Release();
+      deckLinkAttributes = nullptr;
+    }
+    deckLink->Release();
+    deckLink = nullptr;
+  } // end while loop
 
 bail:
   if (deckLink != nullptr) deckLink->Release();
