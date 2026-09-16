@@ -46,13 +46,7 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
   IDeckLinkVideoFrame* completedFrame, BMDOutputFrameCompletionResult result) {
 
   macadamFrame* frame = (macadamFrame*) completedFrame;
-  napi_status status, hangover;
-
-  status = napi_acquire_threadsafe_function(tsFn);
-  if (status != napi_ok) {
-    printf("DEBUG: Failed to acquire NAPI threadsafe function on scheduled frame completion.");
-    return E_FAIL;
-  }
+  napi_status hangover;
 
   frame->deckLinkOutput->GetFrameCompletionReferenceTimestamp(frame, frame->timeScale,
     &frame->completionTimestamp);
@@ -66,11 +60,6 @@ HRESULT playbackThreadsafe::ScheduledFrameCompleted(
   if (hangover != napi_ok) {
     printf("DEBUG: Failed to call NAPI threadsafe function on scheduled frame completion.");
     delete frame;
-  }
-
-  status = napi_release_threadsafe_function(tsFn, napi_tsfn_release);
-  if (status != napi_ok) {
-    printf("DEBUG: Failed to acquire NAPI threadsafe function on scheduled frame completion.");
     return E_FAIL;
   }
 
@@ -973,10 +962,12 @@ void playedFrame(napi_env env, napi_value jsCb, void* context, void* data) {
   //  frame->scheduledTime, frame->completionTimestamp, frame->result);
 
   for (auto it = pbts->pendingPlays.begin(); it != pbts->pendingPlays.end(); ) {
-
-    if (it->first > frame->scheduledTime - pbts->pendingTimeoutTicks) break;
-    char* extMsg = (char *) malloc(sizeof(char) * 200);
-    snprintf(extMsg, sizeof(char) * 200, "Pending frame promise timed out for scheduled time %lld as just played %lld.",
+    if (it->first > frame->scheduledTime - pbts->pendingTimeoutTicks) {
+      ++it;
+      continue;
+    }
+    char extMsg[256];
+    snprintf(extMsg, sizeof(extMsg), "Pending frame promise timed out for scheduled time %lld as just played %lld.",
       (long long) it->second->scheduledTime, (long long) frame->scheduledTime);
     char errorCodeChars[20];
     snprintf(errorCodeChars, 20, "%d", MACADAM_FRAME_TIMEOUT);
@@ -985,7 +976,6 @@ void playedFrame(napi_env env, napi_value jsCb, void* context, void* data) {
     FLOATING_STATUS;
     status = napi_create_string_utf8(env, extMsg, NAPI_AUTO_LENGTH, &errorMsg);
     FLOATING_STATUS;
-    free(extMsg);
     status = napi_create_error(env, errorCode, errorMsg, &errorValue);
     FLOATING_STATUS;
     status = napi_reject_deferred(env, it->second->_deferred, errorValue);
@@ -1298,7 +1288,7 @@ napi_value schedule(napi_env env, napi_callback_info info) {
     status = napi_get_named_property(env, argv[0], "audio", &audioBuffer);
     CHECK_STATUS;
 
-    status = napi_is_buffer(env, videoBuffer, &isBuffer);
+    status = napi_is_buffer(env, audioBuffer, &isBuffer);
     CHECK_STATUS;
 
     if (!isBuffer) {

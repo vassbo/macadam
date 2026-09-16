@@ -43,7 +43,7 @@
 #ifndef PLAYBACK_PROMISE_H
 #define PLAYBACK_PROMISE_H
 
-#include <map>
+#include <unordered_map>
 
 #ifdef WIN32
 #include <tchar.h>
@@ -173,7 +173,7 @@ struct playbackThreadsafe : IDeckLinkVideoOutputCallback {
   int32_t height;
   int32_t rowBytes;
   bool started = false;
-  std::map<BMDTimeValue, scheduleCarrier*> pendingPlays;
+  std::unordered_map<BMDTimeValue, scheduleCarrier*> pendingPlays;
   BMDTimeValue pendingTimeoutTicks = 1000;
   bool enableKeying = false;
   bool isExternal = false;

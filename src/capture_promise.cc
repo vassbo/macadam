@@ -46,12 +46,7 @@ HRESULT captureThreadsafe::VideoInputFrameArrived(
   IDeckLinkVideoInputFrame *videoFrame,
   IDeckLinkAudioInputPacket *audioPacket) {
 
-  napi_status status, hangover;
-  status = napi_acquire_threadsafe_function(tsFn);
-  if (status != napi_ok) {
-    printf("DEBUG: Failed to acquire NAPI threadsafe function on capture.");
-    return E_FAIL;
-  }
+  napi_status hangover;
 
   videoFrame->AddRef();
   if (audioPacket != nullptr) {
@@ -68,12 +63,6 @@ HRESULT captureThreadsafe::VideoInputFrameArrived(
       audioPacket->Release();
     }
     free(data);
-  }
-
-  status = napi_release_threadsafe_function(tsFn, napi_tsfn_release);
-  if (status != napi_ok) {
-    printf("DEBUG: Failed to acquire NAPI threadsafe function on capture.");
-    return E_FAIL;
   }
 
   return (hangover == napi_ok) ? S_OK : E_FAIL;
@@ -893,12 +882,6 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
         c->status = napi_set_named_property(env, obj, "packetTime", param);
         REJECT_BAIL;
       }
-
-      sampleFrameCount = frame->audioPacket->GetSampleFrameCount();
-      c->status = napi_create_int32(env, sampleFrameCount, &param);
-      REJECT_BAIL;
-      c->status = napi_set_named_property(env, obj, "sampleFrameCount", param);
-      REJECT_BAIL;
 
       sampleFrameCount = frame->audioPacket->GetSampleFrameCount();
       c->status = napi_create_int32(env, sampleFrameCount, &param);
