@@ -135,6 +135,7 @@ export const bmdFormat12BitRGBLE             : number
 export const bmdFormat10BitRGBXLE            : number
 // Big-endian 10-bit RGB with SMPTE video levels (64-940)
 export const bmdFormat10BitRGBX              : number
+export const bmdFormat10BitYUVA              : number
 /* Enum BMDDisplayModeFlags - Flags to describe the characteristics of an IDeckLinkDisplayMode. */
 export const bmdDisplayModeSupports3D        : number
 export const bmdDisplayModeColorspaceRec601  : number

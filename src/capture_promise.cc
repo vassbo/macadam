@@ -233,34 +233,25 @@ void captureExecute(napi_env env, void* data) {
 
   BMDDisplayModeSupport supported;
 
-  hresult = deckLinkInput->DoesSupportVideoMode(c->requestedDisplayMode,
-    c->requestedPixelFormat, bmdVideoInputFlagDefault,
-    &supported, &c->selectedDisplayMode);
+  hresult = deckLinkInput->DoesSupportVideoMode(bmdVideoConnectionUnspecified,
+    c->requestedDisplayMode, c->requestedPixelFormat, bmdNoVideoInputConversion,
+    bmdSupportedVideoModeDefault, nullptr, &supported);
   if (hresult != S_OK) {
     deckLinkInput->Release();
     c->status = MACADAM_CALL_FAILURE;
     c->errorMsg = "Unable to determine if video mode is supported by input device.";
     return;
   }
-  switch (supported) {
-    case bmdDisplayModeSupported:
-      break;
-    case bmdDisplayModeSupportedWithConversion:
-      deckLinkInput->Release();
-      if (c->selectedDisplayMode != nullptr) {
-        c->selectedDisplayMode->Release();
-      }
-      c->status = MACADAM_NO_CONVERESION;
-      c->errorMsg = "Display mode is supported via conversion and not by macadam.";
-      return;
-    default:
-      deckLinkInput->Release();
-      if (c->selectedDisplayMode != nullptr) {
-        c->selectedDisplayMode->Release();
-      }
-      c->status = MACADAM_MODE_NOT_SUPPORTED;
-      c->errorMsg = "Requested display mode is not supported.";
-      return;
+  if (supported) {
+    deckLinkInput->GetDisplayMode(c->requestedDisplayMode, &c->selectedDisplayMode);
+  } else {
+    deckLinkInput->Release();
+    if (c->selectedDisplayMode != nullptr) {
+      c->selectedDisplayMode->Release();
+    }
+    c->status = MACADAM_MODE_NOT_SUPPORTED;
+    c->errorMsg = "Requested display mode is not supported.";
+    return;
   }
 
   hresult = deckLinkInput->EnableVideoInput(c->requestedDisplayMode,
@@ -745,7 +736,15 @@ void frameResolver(napi_env env, napi_value jsCb, void* context, void* data) {
     c->status = napi_set_named_property(env, obj, "frameDuration", param);
     REJECT_BAIL;
 
-    hresult = frame->videoFrame->GetBytes(&bytes);
+    IDeckLinkVideoBuffer* videoBuffer = nullptr;
+    hresult = frame->videoFrame->QueryInterface(IID_IDeckLinkVideoBuffer, (void**)&videoBuffer);
+    if (hresult == S_OK) {
+      hresult = videoBuffer->StartAccess(bmdBufferAccessRead);
+      if (hresult == S_OK) {
+        hresult = videoBuffer->GetBytes(&bytes);
+      }
+      videoBuffer->Release();
+    }
     if (hresult != S_OK) {
       c->errorMsg = "Failed to access the byte buffer of a video frame.";
       c->status = MACADAM_CALL_FAILURE;

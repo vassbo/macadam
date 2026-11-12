@@ -20,6 +20,15 @@
 #include <stdio.h>
 #include <string>
 #include "DeckLinkAPI.h"
+#define IDeckLinkAttributes IDeckLinkProfileAttributes
+#define IID_IDeckLinkAttributes IID_IDeckLinkProfileAttributes
+#define BMDDisplayModeSupport BOOL
+#define bmdDisplayModeNotSupported FALSE
+#define bmdDisplayModeSupported TRUE
+#define bmdDeckLinkConfigDuplexMode (BMDDeckLinkConfigurationID) bmdDeckLinkConfigDuplexMode_v10_11
+#define BMDDeckLinkSupportsFullDuplex (BMDDeckLinkAttributeID) BMDDeckLinkSupportsFullDuplex_v10_11
+#define BMDDeckLinkSupportsHDKeying (BMDDeckLinkAttributeID) BMDDeckLinkSupportsHDKeying_v10_11
+#define BMDDeckLinkSupportsDuplexModeConfiguration (BMDDeckLinkAttributeID) BMDDeckLinkSupportsDuplexModeConfiguration_v10_11
 #include "node_api.h"
 
 #define DECLARE_NAPI_METHOD(name, func) { name, 0, func, 0, 0, 0, napi_default, 0 }

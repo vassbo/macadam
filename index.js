@@ -526,6 +526,7 @@ function formatDepth (format) {
   case macadam.bmdFormat8BitBGRA:
     return 8;
   case macadam.bmdFormat10BitRGB:
+  case macadam.bmdFormat10BitYUVA:
     return 10;
   case macadam.bmdFormat12BitRGB:
   case macadam.bmdFormat12BitRGBLE:
@@ -563,6 +564,8 @@ function formatFourCC (format) {
   // Big-endian 10-bit RGB with SMPTE video levels (64-940)
   case macadam.bmdFormat10BitRGBX:
     return 'R10b';
+  case macadam.bmdFormat10BitYUVA:
+    return 'Ay10';
   }
 }
 
@@ -592,6 +595,8 @@ function fourCCFormat(fourCC) {
   // Big-endian 10-bit RGB with SMPTE video levels (64-940)
   case 'R10b':
     return macadam.bmdFormat10BitRGBX;
+  case 'Ay10':
+    return macadam.bmdFormat10BitYUVA;
   }
 }
 
@@ -620,6 +625,8 @@ function formatSampling (format) {
   // Big-endian 10-bit RGB with SMPTE video levels (64-940)
   case macadam.bmdFormat10BitRGBX:
     return 'RGB';
+  case macadam.bmdFormat10BitYUVA:
+    return '4:2:2:4';
   default:
     return '';
   }
@@ -638,6 +645,8 @@ function formatColorimetry (format) {
   // Big-endian RGB 10-bit per component with SMPTE video levels (64-960). Packed as 2:10:10:10
   case macadam.bmdFormat10BitRGB:
     return 'SMPTE240M';
+  case macadam.bmdFormat10BitYUVA:
+    return 'BT709-2';
   // Big-endian RGB 12-bit per component with full range (0-4095). Packed as 12-bit per component
   case macadam.bmdFormat12BitRGB:
     return 'FULL';
@@ -751,6 +760,7 @@ var macadam = {
   bmdFormat10BitRGBXLE            : bmCodeToInt('R10l'),
   // Big-endian 10-bit RGB with SMPTE video levels (64-940)
   bmdFormat10BitRGBX              : bmCodeToInt('R10b'),
+  bmdFormat10BitYUVA              : bmCodeToInt('Ay10'),
   /* Enum BMDDisplayModeFlags - Flags to describe the characteristics of an IDeckLinkDisplayMode. */
   bmdDisplayModeSupports3D        : 1 << 0,
   bmdDisplayModeColorspaceRec601  : 1 << 1,

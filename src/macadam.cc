@@ -42,7 +42,7 @@
 
 #define _WINSOCKAPI_
 
-#include "DeckLinkAPI.h"
+#include "macadam_util.h"
 #include <stdio.h>
 
 #ifdef WIN32
@@ -63,8 +63,8 @@
 #include "node_api.h"
 
 // List of known pixel formats and their matching display names
-const BMDPixelFormat gKnownPixelFormats[] = {bmdFormat8BitYUV, bmdFormat10BitYUV, bmdFormat8BitARGB, bmdFormat8BitBGRA, bmdFormat10BitRGB, bmdFormat12BitRGB, bmdFormat12BitRGBLE, bmdFormat10BitRGBXLE, bmdFormat10BitRGBX, (BMDPixelFormat) 0};
-const char* gKnownPixelFormatNames[] = {"8-bit YUV", "10-bit YUV", "8-bit ARGB", "8-bit BGRA", "10-bit RGB", "12-bit RGB", "12-bit RGBLE", "10-bit RGBXLE", "10-bit RGBX", NULL};
+const BMDPixelFormat gKnownPixelFormats[] = {bmdFormat8BitYUV, bmdFormat10BitYUV, bmdFormat8BitARGB, bmdFormat8BitBGRA, bmdFormat10BitRGB, bmdFormat12BitRGB, bmdFormat12BitRGBLE, bmdFormat10BitRGBXLE, bmdFormat10BitRGBX, bmdFormat10BitYUVA, (BMDPixelFormat) 0};
+const char* gKnownPixelFormatNames[] = {"8-bit YUV", "10-bit YUV", "8-bit ARGB", "8-bit BGRA", "10-bit RGB", "12-bit RGB", "12-bit RGBLE", "10-bit RGBXLE", "10-bit RGBX", "10-bit YUVA", NULL};
 
 const BMDDeckLinkConfigurationID knownConfigValues[] = {
   /* Serial port Flags */
@@ -1541,8 +1541,8 @@ napi_status queryOutputDisplayModes(napi_env env, IDeckLink* deckLink, napi_valu
 		while ((gKnownPixelFormats[pixelFormatIndex] != 0) &&
         (gKnownPixelFormatNames[pixelFormatIndex] != NULL)) {
 			if ((deckLinkIO->DoesSupportVideoMode(
-        displayMode->GetDisplayMode(), gKnownPixelFormats[pixelFormatIndex],
-        bmdVideoOutputFlagDefault, &displayModeSupport, NULL) == S_OK)
+        bmdVideoConnectionUnspecified, displayMode->GetDisplayMode(), gKnownPixelFormats[pixelFormatIndex],
+        bmdNoVideoOutputConversion, bmdSupportedVideoModeDefault, NULL, &displayModeSupport) == S_OK)
 					&& (displayModeSupport != bmdDisplayModeNotSupported)) {
 
 				status = napi_create_string_utf8(env, gKnownPixelFormatNames[pixelFormatIndex],
@@ -1672,8 +1672,8 @@ napi_status queryInputDisplayModes(napi_env env, IDeckLink* deckLink, napi_value
 		while ((gKnownPixelFormats[pixelFormatIndex] != 0) &&
         (gKnownPixelFormatNames[pixelFormatIndex] != NULL)) {
 			if ((deckLinkIO->DoesSupportVideoMode(
-        displayMode->GetDisplayMode(), gKnownPixelFormats[pixelFormatIndex],
-        bmdVideoOutputFlagDefault, &displayModeSupport, NULL) == S_OK)
+        bmdVideoConnectionUnspecified, displayMode->GetDisplayMode(), gKnownPixelFormats[pixelFormatIndex],
+        bmdNoVideoInputConversion, bmdSupportedVideoModeDefault, NULL, &displayModeSupport) == S_OK)
 					&& (displayModeSupport != bmdDisplayModeNotSupported)) {
 
 				status = napi_create_string_utf8(env, gKnownPixelFormatNames[pixelFormatIndex],
