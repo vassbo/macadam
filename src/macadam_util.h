@@ -22,9 +22,19 @@
 #include "DeckLinkAPI.h"
 #define IDeckLinkAttributes IDeckLinkProfileAttributes
 #define IID_IDeckLinkAttributes IID_IDeckLinkProfileAttributes
+
+#ifdef WIN32
 #define BMDDisplayModeSupport BOOL
 #define bmdDisplayModeNotSupported FALSE
 #define bmdDisplayModeSupported TRUE
+#else
+#define BMDDisplayModeSupport bool
+#define bmdDisplayModeNotSupported false
+#define bmdDisplayModeSupported true
+#include "DeckLinkAPIConfiguration_v10_11.h"
+#include "DeckLinkAPI_v10_11.h"
+#endif
+
 #define bmdDeckLinkConfigDuplexMode (BMDDeckLinkConfigurationID) bmdDeckLinkConfigDuplexMode_v10_11
 #define BMDDeckLinkSupportsFullDuplex (BMDDeckLinkAttributeID) BMDDeckLinkSupportsFullDuplex_v10_11
 #define BMDDeckLinkSupportsHDKeying (BMDDeckLinkAttributeID) BMDDeckLinkSupportsHDKeying_v10_11
