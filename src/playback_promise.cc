@@ -138,9 +138,9 @@ void playbackExecute(napi_env env, void* data) {
 
   BMDDisplayModeSupport supported;
 
-  hresult = deckLinkOutput->DoesSupportVideoMode(c->requestedDisplayMode,
-    c->requestedPixelFormat, bmdVideoOutputFlagDefault,
-    &supported, &c->selectedDisplayMode);
+  hresult = deckLinkOutput->DoesSupportVideoMode(bmdVideoConnectionUnspecified,
+    c->requestedDisplayMode, c->requestedPixelFormat, bmdNoVideoOutputConversion,
+    bmdSupportedVideoModeDefault, nullptr, &supported);
   if (hresult != S_OK) {
     deckLinkOutput->Release();
     if (c->enableKeying && deckLinkKeyer != nullptr) {
@@ -150,33 +150,20 @@ void playbackExecute(napi_env env, void* data) {
     c->errorMsg = "Unable to determine if video mode is supported by output device.";
     return;
   }
-  switch (supported) {
-    case bmdDisplayModeSupported:
-      break;
-    case bmdDisplayModeSupportedWithConversion:
-      deckLinkOutput->Release();
-      if (c->enableKeying && deckLinkKeyer != nullptr) {
-        deckLinkKeyer->Release();
-      }
-      if (c->selectedDisplayMode != nullptr) {
-        c->selectedDisplayMode->Release();
-      }
-      c->status = MACADAM_NO_CONVERESION; // TODO consider adding conversion support
-      c->errorMsg = "Display mode is supported via conversion and not by macadam.";
-      return;
-    default:
-      deckLinkOutput->Release();
-      if (c->enableKeying && deckLinkKeyer != nullptr) {
-        deckLinkKeyer->Release();
-      }
-      if (c->selectedDisplayMode != nullptr) {
-        c->selectedDisplayMode->Release();
-      }
-      c->status = MACADAM_MODE_NOT_SUPPORTED;
-      c->errorMsg = "Requested display mode is not supported.";
-      return;
+  if (supported) {
+    deckLinkOutput->GetDisplayMode(c->requestedDisplayMode, &c->selectedDisplayMode);
+  } else {
+    deckLinkOutput->Release();
+    if (c->enableKeying && deckLinkKeyer != nullptr) {
+      deckLinkKeyer->Release();
+    }
+    if (c->selectedDisplayMode != nullptr) {
+      c->selectedDisplayMode->Release();
+    }
+    c->status = MACADAM_MODE_NOT_SUPPORTED;
+    c->errorMsg = "Requested display mode is not supported.";
+    return;
   }
-
   if (c->timecode != nullptr) {
     switch (c->selectedDisplayMode->GetDisplayMode()) {
       case bmdModePAL:
@@ -394,6 +381,7 @@ void playbackComplete(napi_env env, napi_status asyncStatus, void* data) {
     case bmdFormat10BitRGB:
     case bmdFormat10BitRGBXLE:
     case bmdFormat10BitRGBX:
+    case bmdFormat10BitYUVA:
       rowBytes = ((int32_t) ((width + 63) / 64)) * 256;
       break;
     case bmdFormat12BitRGB:
@@ -834,10 +822,11 @@ napi_value playback(napi_env env, napi_callback_info info) {
       switch (c->requestedPixelFormat) {
         case bmdFormat8BitARGB:
         case bmdFormat8BitBGRA:
+        case bmdFormat10BitYUVA:
           break;
         default:
           REJECT_ERROR_RETURN(
-            "Pixel format must include an alpha channel. Only 8-bit ARGB and BGRA are supported.",
+            "Pixel format must include an alpha channel. Only 8-bit ARGB, BGRA and 10-bit YUVA are supported.",
             MACADAM_INVALID_ARGS);
       }
     }
