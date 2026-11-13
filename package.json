@@ -34,7 +34,7 @@
   "homepage": "https://github.com/Streampunk/macadam#readme",
   "dependencies": {
     "bindings": "^1.5.0",
-    "cross-spawn": "^7.0.3",
+    "cross-spawn": "^7.0.6",
     "highland": "^2.13.5"
   },
   "gypfile": true,
