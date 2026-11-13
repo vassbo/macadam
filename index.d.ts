@@ -229,7 +229,7 @@ export function formatColorimetry(f: number) : string
 
 // access details about the currently connected devices
 export function deckLinkVersion() : string
-export function getFirstDevice() : string
+export function getFirstDevice() : string | undefined
 
 export function getDeviceInfo() : { [key: string]: unknown }
 
