@@ -233,10 +233,16 @@ export function getFirstDevice() : string | undefined
 
 export function getDeviceInfo() : { [key: string]: unknown }
 
-export type ConfigParams = { [key: string]: unknown }
+export interface DeviceConfiguration {
+  type: 'configuration'
+  deviceIndex: number
+  [key: string]: unknown
+}
 
-export function getDeviceConfig(i: number) : ConfigParams
-export function setDeviceConfig(config: ConfigParams) : ConfigParams
+export type ConfigParams = DeviceConfiguration | { [key: string]: unknown }
+
+export function getDeviceConfig(i: number) : DeviceConfiguration
+export function setDeviceConfig(config: ConfigParams) : DeviceConfiguration
 
 export type Dominance = 'progressiveFrame' | 'upperFieldFirst' | 'lowerFieldFirst' | 'unknown'
 

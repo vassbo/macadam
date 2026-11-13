@@ -138,9 +138,14 @@ void playbackExecute(napi_env env, void* data) {
 
   BMDDisplayModeSupport supported;
 
+  BMDSupportedVideoModeFlags flags = bmdSupportedVideoModeDefault;
+  if (c->enableKeying) {
+    flags |= bmdSupportedVideoModeKeying;
+  }
+
   hresult = deckLinkOutput->DoesSupportVideoMode(bmdVideoConnectionUnspecified,
     c->requestedDisplayMode, c->requestedPixelFormat, bmdNoVideoOutputConversion,
-    bmdSupportedVideoModeDefault, nullptr, &supported);
+    flags, nullptr, &supported);
   if (hresult != S_OK) {
     deckLinkOutput->Release();
     if (c->enableKeying && deckLinkKeyer != nullptr) {
